@@ -1,0 +1,14 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_dashboard"
+        android:icon="@android:drawable/ic_menu_today"
+        android:title="Bảng giá" />
+    <item
+        android:id="@+id/nav_converter"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:title="Chuyển đổi" />
+    <item
+        android:id="@+id/nav_history"
+        android:icon="@android:drawable/ic_menu_recent_history"
+        android:title="Lịch sử" />
+</menu>
