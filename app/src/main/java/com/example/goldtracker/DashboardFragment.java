@@ -13,10 +13,10 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import retrofit2.Call;
@@ -36,11 +36,13 @@ public class DashboardFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.activity_fragment_dashboard, container, false);
 
+        // 1. Ánh xạ và thiết lập RecyclerView
         recyclerView = view.findViewById(R.id.rvGoldPrices);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new GoldAdapter(goldList);
         recyclerView.setAdapter(adapter);
 
+        // 2. Gọi lấy dữ liệu
         fetchGoldPrices();
 
         return view;
@@ -48,7 +50,7 @@ public class DashboardFragment extends Fragment {
 
     private void fetchGoldPrices() {
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("http://api.btmc.vn/")
+                .baseUrl("https://vang.today/")
                 .addConverterFactory(ScalarsConverterFactory.create())
                 .build();
 
@@ -58,61 +60,39 @@ public class DashboardFragment extends Fragment {
             @Override
             public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    String jsonRaw = response.body();
-
                     try {
-                        JSONObject root = new JSONObject(jsonRaw);
-                        JSONObject dataListObj = root.getJSONObject("DataList");
-                        JSONArray dataArray = dataListObj.getJSONArray("Data");
+                        JSONObject root = new JSONObject(response.body());
 
-                        goldList.clear();
+                        if (root.getBoolean("success")) {
+                            // Lấy object "prices" (vì đây là JSONObject, không phải JSONArray)
+                            JSONObject pricesObj = root.getJSONObject("prices");
 
-                        goldList.clear();
+                            goldList.clear();
 
-                        // THỨ NHẤT: Thử lấy tất cả dữ liệu nếu chúng nằm chung trong phần tử đầu tiên [0]
-                        if (dataArray.length() > 0) {
-                            JSONObject allData = dataArray.getJSONObject(0);
-                            for (int i = 518; i <= 548; i++) {
-                                String keyName = "@n_" + i;
-                                String keyBuy = "@pb_" + i;
-                                String keySell = "@ps_" + i;
+                            // Lặp qua tất cả các key bên trong (SJL1L10, XAUUSD, BTSJC...)
+                            Iterator<String> keys = pricesObj.keys();
+                            while (keys.hasNext()) {
+                                String key = keys.next();
+                                JSONObject item = pricesObj.getJSONObject(key);
 
-                                if (allData.has(keyName)) {
-                                    String name = allData.optString(keyName, "");
-                                    String buy = allData.optString(keyBuy, "0");
-                                    String sell = allData.optString(keySell, "0");
+                                // Lấy dữ liệu name, buy, sell
+                                String nameFromApi = item.optString("name", key);
+                                String buy = item.optString("buy", "0");
+                                String sell = item.optString("sell", "0");
 
-                                    if (!name.isEmpty()) {
-                                        goldList.add(new GoldModel(name, buy, sell));
-                                    }
-                                }
+                                // Dùng hàm formatGoldName để tên hiển thị chuyên nghiệp hơn
+                                String friendlyName = formatGoldName(key, nameFromApi);
+
+                                goldList.add(new GoldModel(friendlyName, buy, sell));
+                            }
+
+                            // 3. Cập nhật giao diện trên UI Thread
+                            if (isAdded() && getActivity() != null) {
+                                getActivity().runOnUiThread(() -> adapter.notifyDataSetChanged());
                             }
                         }
-
-                        // THỨ HAI: Nếu cách trên không ra dữ liệu (list vẫn trống), thử duyệt từng phần tử mảng
-                        if (goldList.isEmpty()) {
-                            for (int i = 0; i < dataArray.length(); i++) {
-                                JSONObject item = dataArray.getJSONObject(i);
-                                int rowNum = item.optInt("@row", -1);
-
-                                if (rowNum >= 518 && rowNum <= 548) {
-                                    String name = item.optString("@n_" + rowNum, "");
-                                    String buy = item.optString("@pb_" + rowNum, "0");
-                                    String sell = item.optString("@ps_" + rowNum, "0");
-
-                                    if (!name.isEmpty()) {
-                                        goldList.add(new GoldModel(name, buy, sell));
-                                    }
-                                }
-                            }
-                        }
-
-                        if (isAdded() && getActivity() != null) {
-                            getActivity().runOnUiThread(() -> adapter.notifyDataSetChanged());
-                        }
-
                     } catch (Exception e) {
-                        Log.e("GOLD_API", "Lỗi phân tích JSON: " + e.getMessage());
+                        Log.e("GOLD_DEBUG", "Lỗi Parsing: " + e.getMessage());
                     }
                 }
             }
@@ -124,5 +104,20 @@ public class DashboardFragment extends Fragment {
                 }
             }
         });
+    }
+
+    // Hàm đổi tên mã vàng sang tiếng Việt thân thiện
+    private String formatGoldName(String code, String defaultName) {
+        switch (code) {
+            case "SJL1L10": return "Vàng SJC (1L - 10L)";
+            case "SJ9999":  return "Vàng Nhẫn SJC 99.99";
+            case "XAUUSD":  return "Vàng Thế Giới (USD/Ounce)";
+            case "BTSJC":   return "Bảo Tín SJC";
+            case "BT9999NTT": return "Bảo Tín Vàng Rồng Thăng Long";
+            case "DOHNL":   return "DOJI Hà Nội (Lẻ)";
+            case "DOHCML":  return "DOJI TP.HCM (Lẻ)";
+            case "PQHN24NTT": return "PNJ Hà Nội 24K";
+            default: return defaultName;
+        }
     }
 }

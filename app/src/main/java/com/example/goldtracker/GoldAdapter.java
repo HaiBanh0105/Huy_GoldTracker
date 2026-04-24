@@ -1,5 +1,6 @@
 package com.example.goldtracker;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -27,6 +28,7 @@ public class GoldAdapter extends RecyclerView.Adapter<GoldAdapter.ViewHolder> {
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         GoldModel gold = goldList.get(position);
+        Log.d("GOLD_DEBUG", "Đang vẽ lên màn hình: " + gold.getName());
         holder.tvName.setText(gold.getName());
 
         // Định dạng số tiền có dấu phân cách phần nghìn
@@ -36,13 +38,16 @@ public class GoldAdapter extends RecyclerView.Adapter<GoldAdapter.ViewHolder> {
 
     // Hàm bổ trợ để định dạng tiền tệ
     private String formatCurrency(String price) {
+        if (price == null || price.isEmpty()) return "0 đ";
         try {
-            long value = Long.parseLong(price);
-            // Sử dụng Locale Vietnam để có định dạng chuẩn tiếng Việt
+            // Loại bỏ các ký tự không phải số (nếu API trả về có dấu chấm sẵn)
+            String cleanPrice = price.replaceAll("[^\\d]", "");
+            double value = Double.parseDouble(cleanPrice);
+
             NumberFormat formatter = NumberFormat.getInstance(new Locale("vi", "VN"));
-            return formatter.format(value);
+            return formatter.format(value) + " đ";
         } catch (Exception e) {
-            return price; // Nếu lỗi (không phải số) thì trả về chuỗi gốc
+            return price; // Trả về gốc nếu không xử lý được
         }
     }
 
