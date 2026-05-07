@@ -92,8 +92,12 @@ public class ConverterFragment extends Fragment {
                             Iterator<String> keys = pricesObj.keys();
                             while (keys.hasNext()) {
                                 String key = keys.next();
-                                JSONObject item = pricesObj.getJSONObject(key);
 
+                                if (key.equals("XAUUSD")) {
+                                    continue;
+                                }
+
+                                JSONObject item = pricesObj.getJSONObject(key);
                                 String nameFromApi = item.optString("name", key);
                                 String buy = item.optString("buy", "0");
                                 String sell = item.optString("sell", "0");

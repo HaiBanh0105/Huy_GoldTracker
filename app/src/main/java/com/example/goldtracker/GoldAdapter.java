@@ -28,10 +28,21 @@ public class GoldAdapter extends RecyclerView.Adapter<GoldAdapter.ViewHolder> {
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         GoldModel gold = goldList.get(position);
+
+        // KIỂM TRA: Nếu tên là Vàng Thế Giới thì ẩn đi
+        if (gold.getName().contains("Thế Giới") || gold.getName().equalsIgnoreCase("Vàng Thế Giới")) {
+            holder.itemView.setVisibility(View.GONE);
+            holder.itemView.setLayoutParams(new RecyclerView.LayoutParams(0, 0));
+            return; // Dừng lại không vẽ tiếp mục này
+        } else {
+            holder.itemView.setVisibility(View.VISIBLE);
+            holder.itemView.setLayoutParams(new RecyclerView.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
         Log.d("GOLD_DEBUG", "Đang vẽ lên màn hình: " + gold.getName());
         holder.tvName.setText(gold.getName());
-
-        // Định dạng số tiền có dấu phân cách phần nghìn
         holder.tvBuy.setText(formatCurrency(gold.getBuyPrice()));
         holder.tvSell.setText(formatCurrency(gold.getSellPrice()));
     }
