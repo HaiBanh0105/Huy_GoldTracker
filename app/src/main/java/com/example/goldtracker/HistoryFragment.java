@@ -76,7 +76,6 @@ public class HistoryFragment extends Fragment {
         String[] goldDisplayNames = {
                 "Vàng SJC (1L - 10L)",
                 "Vàng Nhẫn SJC 99.99",
-                "Vàng Thế Giới",
                 "Bảo Tín SJC",
                 "PNJ Hà Nội 24K"
         };
