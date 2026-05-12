@@ -49,6 +49,14 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp">
 
+        <Button
+            android:id="@+id/btnExportPDF"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Xuất Báo Cáo PDF"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

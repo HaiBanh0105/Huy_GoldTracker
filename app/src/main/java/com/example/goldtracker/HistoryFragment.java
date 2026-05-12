@@ -3,7 +3,6 @@ package com.example.goldtracker;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
-import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -41,18 +40,28 @@ import retrofit2.converter.scalars.ScalarsConverterFactory;
 public class HistoryFragment extends Fragment {
 
     private RecyclerView rvHistory;
-    private HistoryAdapter historyAdapter; // Đổi tên để tránh trùng với Spinner Adapter
+    private HistoryAdapter historyAdapter;
     private List<String> listData = new ArrayList<>();
-    private Button btnClearHistory;
+    private Button btnClearHistory, btnExportPDF;
     private LineChart lineChart;
     private GoldApiService apiService;
+
+    // Khai báo Spinner làm biến toàn cục để truy cập được từ mọi hàm
+    private Spinner spnChartGoldType;
+    private Spinner spnChartDays;
+
+    // Biến lưu trữ dữ liệu hiện tại để phục vụ xuất PDF
+    private List<Entry> currentEntries = new ArrayList<>();
+    private List<String> currentLabels = new ArrayList<>();
+    private String currentSelectedGold = "";
+    private String currentSelectedDays = "";
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.activity_fragment_history, container, false);
 
-        // 1. Khởi tạo Retrofit & Service
+        // 1. Khởi tạo Retrofit
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("https://vang.today/")
                 .addConverterFactory(ScalarsConverterFactory.create())
@@ -63,12 +72,13 @@ public class HistoryFragment extends Fragment {
         lineChart = view.findViewById(R.id.lineChart);
         rvHistory = view.findViewById(R.id.rvHistory);
         btnClearHistory = view.findViewById(R.id.btnClearHistory);
-        Spinner spnChartGoldType = view.findViewById(R.id.spnChartGoldType);
-        Spinner spnChartDays = view.findViewById(R.id.spnChartDays);
+        btnExportPDF = view.findViewById(R.id.btnExportPDF);
+        spnChartGoldType = view.findViewById(R.id.spnChartGoldType);
+        spnChartDays = view.findViewById(R.id.spnChartDays);
 
         // 3. Thiết lập Spinner Ngày
         String[] daysOption = {"7 ngày", "15 ngày", "30 ngày"};
-        ArrayAdapter<String> daysAdapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_item, daysOption);
+        ArrayAdapter<String> daysAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, daysOption);
         daysAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spnChartDays.setAdapter(daysAdapter);
 
@@ -79,18 +89,16 @@ public class HistoryFragment extends Fragment {
                 "Bảo Tín SJC",
                 "PNJ Hà Nội 24K"
         };
-        ArrayAdapter<String> goldAdapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_item, goldDisplayNames);
+        ArrayAdapter<String> goldAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, goldDisplayNames);
         goldAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spnChartGoldType.setAdapter(goldAdapter);
 
-        // 5. Lắng nghe Spinner (Sửa lỗi logic lấy mã code tại đây)
+        // 5. Lắng nghe Spinner
         AdapterView.OnItemSelectedListener chartListener = new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 String selectedName = spnChartGoldType.getSelectedItem().toString();
-                // Dùng hàm getCodeFromName để lấy mã chuẩn cho API
                 String typeCode = getCodeFromName(selectedName);
-
                 String dayStr = spnChartDays.getSelectedItem().toString().replace(" ngày", "");
                 fetchChartData(typeCode, dayStr);
             }
@@ -99,13 +107,28 @@ public class HistoryFragment extends Fragment {
         spnChartGoldType.setOnItemSelectedListener(chartListener);
         spnChartDays.setOnItemSelectedListener(chartListener);
 
-        // 6. Thiết lập RecyclerView Lịch sử
+        // 6. Xử lý xuất PDF
+        btnExportPDF.setOnClickListener(v -> {
+            if (currentEntries == null || currentEntries.isEmpty()) {
+                Toast.makeText(getContext(), "Vui lòng đợi biểu đồ tải xong dữ liệu!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            PdfGenerator.exportGoldReport(
+                    requireContext(),
+                    currentSelectedGold,
+                    currentSelectedDays,
+                    currentEntries,
+                    currentLabels
+            );
+        });
+
+        // 7. Thiết lập RecyclerView Lịch sử
         rvHistory.setLayoutManager(new LinearLayoutManager(getContext()));
         loadHistoryFromPrefs();
         historyAdapter = new HistoryAdapter(listData);
         rvHistory.setAdapter(historyAdapter);
 
-        // 7. Xử lý xóa lịch sử
+        // 8. Xử lý xóa lịch sử
         btnClearHistory.setOnClickListener(v -> clearHistory());
 
         return view;
@@ -126,12 +149,11 @@ public class HistoryFragment extends Fragment {
                             List<String> labels = new ArrayList<>();
 
                             int index = 0;
-                            // Duyệt ngược để biểu đồ đi từ cũ đến mới
                             for (int i = historyArray.length() - 1; i >= 0; i--) {
                                 JSONObject dayObj = historyArray.getJSONObject(i);
                                 String date = dayObj.optString("date", "");
-
                                 JSONObject pricesObj = dayObj.getJSONObject("prices");
+
                                 if (pricesObj.has(targetType)) {
                                     JSONObject details = pricesObj.getJSONObject(targetType);
                                     float sellPrice = (float) (details.getDouble("sell") / 1000000.0);
@@ -147,7 +169,15 @@ public class HistoryFragment extends Fragment {
                             }
 
                             if (isAdded() && getActivity() != null) {
-                                getActivity().runOnUiThread(() -> updateLineChart(entries, labels));
+                                getActivity().runOnUiThread(() -> {
+                                    // Cập nhật các biến dùng để in PDF
+                                    currentEntries = new ArrayList<>(entries);
+                                    currentLabels = new ArrayList<>(labels);
+                                    currentSelectedGold = spnChartGoldType.getSelectedItem().toString();
+                                    currentSelectedDays = spnChartDays.getSelectedItem().toString();
+
+                                    updateLineChart(entries, labels);
+                                });
                             }
                         }
                     } catch (Exception e) {
@@ -170,7 +200,7 @@ public class HistoryFragment extends Fragment {
         dataSet.setLineWidth(2.5f);
         dataSet.setCircleRadius(4f);
         dataSet.setDrawValues(false);
-        dataSet.setMode(com.github.mikephil.charting.data.LineDataSet.Mode.CUBIC_BEZIER);
+        dataSet.setMode(LineDataSet.Mode.CUBIC_BEZIER);
         dataSet.setDrawFilled(true);
         dataSet.setFillColor(Color.parseColor("#FFD700"));
         dataSet.setFillAlpha(40);
@@ -204,11 +234,12 @@ public class HistoryFragment extends Fragment {
     }
 
     private void clearHistory() {
+        if (getContext() == null) return;
         new androidx.appcompat.app.AlertDialog.Builder(getContext())
                 .setTitle("Xác nhận xóa")
                 .setMessage("Bạn có chắc chắn muốn xóa toàn bộ lịch sử?")
                 .setPositiveButton("Xóa", (dialog, which) -> {
-                    android.content.SharedPreferences pref = getActivity().getSharedPreferences("GoldTracker", android.content.Context.MODE_PRIVATE);
+                    android.content.SharedPreferences pref = requireActivity().getSharedPreferences("GoldTracker", android.content.Context.MODE_PRIVATE);
                     pref.edit().remove("history_list").apply();
                     listData.clear();
                     historyAdapter.notifyDataSetChanged();
@@ -228,12 +259,4 @@ public class HistoryFragment extends Fragment {
             default: return "SJL1L10";
         }
     }
-
-//    private int getDynamicTextColor() {
-//        TypedValue typedValue = new TypedValue();
-//        // android.R.attr.textColorPrimary là màu chữ mặc định của hệ thống
-//        // (Đen ở Light mode, Trắng ở Dark mode)
-//        getContext().getTheme().resolveAttribute(android.R.attr.textColorPrimary, typedValue, true);
-//        return typedValue.data;
-//    }
 }
