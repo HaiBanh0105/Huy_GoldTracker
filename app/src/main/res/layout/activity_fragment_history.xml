@@ -48,7 +48,7 @@
         android:id="@+id/btnExportPDF"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Xuất Báo Cáo PDF"
+        android:text="Xuất PDF"
         android:backgroundTint="#4CAF50"
         android:textColor="#FFFFFF" />
 
